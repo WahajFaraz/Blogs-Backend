@@ -220,16 +220,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // For Vercel
 const vercelApp = createApp();
-
-// Export the Vercel serverless function
-export default async (req, res) => {
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
   
-  // Initialize MongoDB connection for Vercel
   if (!mongoose.connection.readyState) {
     const isConnected = await connectWithRetry();
     if (!isConnected) {
