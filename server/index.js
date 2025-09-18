@@ -15,88 +15,118 @@ import blogRoutes from './routes/blog.js';
 import mediaRoutes from './routes/media.js';
 
 // Create Express app
-// Create Express app instance
-const app = express();
+const createApp = () => {
+  const app = express();
 
-// 1) GLOBAL MIDDLEWARES
+  // 1) GLOBAL MIDDLEWARES
 
-// Set security HTTP headers
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-      fontSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'https://api.cloudinary.com'],
+  // Set security HTTP headers
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        fontSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'", 'https://api.cloudinary.com'],
+      },
     },
-  },
-}));
+  }));
 
-// Development logging
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-} else {
-  app.use(morgan('combined'));
-}
+  // Development logging
+  if (process.env.NODE_ENV === 'development') {
+    app.use(morgan('dev'));
+  } else {
+    app.use(morgan('combined'));
+  }
 
-// Enable CORS
-const allowedOrigins = [
-  'https://blogspace-orpin.vercel.app'
-];
+  // Enable CORS
+  const allowedOrigins = [
+    'https://blogspace-orpin.vercel.app',
+    'http://localhost:3000' // For local development
+  ];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
-}));
+  const corsOptions = {
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        console.log('CORS error for origin:', origin);
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range']
+  };
+  
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 
-const limiter = rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many requests from this IP, please try again in 15 minutes!',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+  // Rate limiting
+  const limiter = rateLimit({
+    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    message: 'Too many requests from this IP, please try again in 15 minutes!',
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
-app.use('/api', limiter);
+  // Apply rate limiting to API routes
+  app.use('/api', limiter);
+  app.use('/api/v1', limiter);
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Body parser, reading data from body into req.body
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use(mongoSanitize());
+  // Data sanitization against NoSQL query injection
+  app.use(mongoSanitize());
 
-app.use(xss());
+  // Data sanitization against XSS
+  app.use(xss());
 
-app.use(hpp({
-  whitelist: [
-    'duration', 'ratingsQuantity', 'ratingsAverage', 'maxGroupSize', 'difficulty', 'price'
-  ]
-}));
+  // Prevent parameter pollution
+  app.use(hpp({
+    whitelist: [
+      'duration', 'ratingsQuantity', 'ratingsAverage', 'maxGroupSize', 'difficulty', 'price'
+    ]
+  }));
 
-// Compress all responses
-app.use(compression());
+  // Compress all responses
+  app.use(compression());
 
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/v1/', apiLimiter);
+  // 2) ROUTES
+  app.use('/api/v1/users', userRoutes);
+  app.use('/api/v1/blogs', blogRoutes);
+  app.use('/api/v1/media', mediaRoutes);
+
+  // 3) ERROR HANDLING MIDDLEWARE (should be after all routes)
+  app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+      status: 'error',
+      message: err.message || 'Internal Server Error',
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
+  });
+
+  // 4) 404 HANDLER
+  app.all('*', (req, res) => {
+    res.status(404).json({
+      status: 'fail',
+      message: `Can't find ${req.originalUrl} on this server!`
+    });
+  });
+
+  return app;
+};
 
 
 // Connect to MongoDB with retry logic
@@ -275,6 +305,31 @@ if (process.env.NODE_ENV !== 'production') {
   startServer();
 }
 
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  const app = createApp();
+  const PORT = process.env.PORT || 5001;
+  
+  const startServer = async () => {
+    try {
+      await mongoose.connect(process.env.MONGO_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+      });
+      console.log('Connected to MongoDB');
+
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+      });
+    } catch (error) {
+      console.error('Error connecting to MongoDB:', error);
+      process.exit(1);
+    }
+  };
+  
+  startServer();
+}
+
 // For Vercel
 const vercelApp = createApp();
 
@@ -284,6 +339,24 @@ export default async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
+  }
+  
+  // Initialize MongoDB connection for Vercel
+  if (!mongoose.connection.readyState) {
+    try {
+      await mongoose.connect(process.env.MONGO_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+      });
+      console.log('Connected to MongoDB (Vercel)');
+    } catch (error) {
+      console.error('Error connecting to MongoDB (Vercel):', error);
+      return res.status(500).json({ 
+        status: 'error',
+        message: 'Database connection failed',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
   
   // Pass the request to the Express app
