@@ -18,9 +18,6 @@ import mediaRoutes from './routes/media.js';
 const createApp = () => {
   const app = express();
 
-  // 1) GLOBAL MIDDLEWARES
-
-  // Set security HTTP headers
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
@@ -33,14 +30,33 @@ const createApp = () => {
     app.use(morgan('combined'));
   }
 
+  const allowedOrigins = [
+    'https://blogspace-orpin.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ];
+
   const corsOptions = {
-    origin: '*',
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (process.env.NODE_ENV === 'development' || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range', 'Set-Cookie'],
+    credentials: true,
+    maxAge: 86400, // 24 hours
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   };
   
+  // Apply CORS with the options
   app.use(cors(corsOptions));
   app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 
