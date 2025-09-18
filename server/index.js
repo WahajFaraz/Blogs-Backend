@@ -36,12 +36,13 @@ const createApp = () => {
     'http://localhost:3000'
   ];
 
+  // Configure CORS with explicit headers and preflight caching
   const corsOptions = {
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      if (process.env.NODE_ENV === 'development' || allowedOrigins.indexOf(origin) !== -1) {
+      if (process.env.NODE_ENV === 'development' || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -54,17 +55,17 @@ const createApp = () => {
       'X-Requested-With',
       'Accept',
       'Origin',
-      'X-Content-Range'
+      'X-Content-Range',
+      'Set-Cookie',
+      'Content-Length'
     ],
     exposedHeaders: [
       'Content-Range',
       'X-Content-Range',
-      'Set-Cookie',
-      'Content-Length',
-      'Content-Type'
+      'Content-Length'
     ],
     credentials: true,
-    maxAge: 86400, // 24 hours
+    maxAge: 86400, // Cache preflight request for 24 hours
     preflightContinue: false,
     optionsSuccessStatus: 204
   };
