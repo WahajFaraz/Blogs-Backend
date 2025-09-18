@@ -45,7 +45,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Enable CORS
 const allowedOrigins = [
-  'https://blogspace-orpin.vercel.app/'
+  'https://blogspace-orpin.vercel.app'
 ];
 
 app.use(cors({
