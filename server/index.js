@@ -45,7 +45,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Enable CORS
 const allowedOrigins = [
-  'http://localhost:5173'
+  'https://blogspace-orpin.vercel.app/'
 ];
 
 app.use(cors({
