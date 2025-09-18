@@ -137,7 +137,7 @@ const createApp = () => {
   
   const corsOptions = {
     origin: isProduction 
-      ? ['https://blogspace.vercel.app', 'https://blogspace-two.vercel.app']
+      ? ['https://blogspace-orpin.vercel.app/', 'https://blogspace-orpin.vercel.app/']
       : '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
