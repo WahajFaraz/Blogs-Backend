@@ -218,8 +218,11 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// For Vercel
+// For Vercel 
 const vercelApp = createApp();
+// Export the Vercel serverless function
+export default async (req, res) => {
+  // Handle preflight requests
   
   if (!mongoose.connection.readyState) {
     const isConnected = await connectWithRetry();
@@ -227,13 +230,8 @@ const vercelApp = createApp();
       return res.status(500).json({ 
         status: 'error',
         message: 'Database connection failed',
-        ...(process.env.NODE_ENV === 'development' && { 
-          error: 'Failed to connect to MongoDB after retry' 
-        })
-      });
-    }
-  }
-  
-  // Pass the request to the Express app
-  return vercelApp(req, res);
-};
+        ...(process.env.NODE_ENV === 'development' && {
+          error: 'Failed to connect to MongoDB after retry'
+        }) }); } 
+  } // Pass the request to the Express app
+  return vercelApp(req, res); };
