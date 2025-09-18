@@ -6,12 +6,27 @@ import { deleteFile } from '../utils/cloudinary.js';
 
 const router = express.Router();
 
+// Enable CORS for all routes
+router.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
+// Get all published blogs with pagination and filtering
 router.get('/', optionalAuth, async (req, res) => {
   console.log('GET /blogs - Query params:', req.query);
   try {
     const { page = 1, limit = 10, category, search, sort = 'newest' } = req.query;
     
-    // Validate page and limit
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     
@@ -66,10 +81,8 @@ router.get('/', optionalAuth, async (req, res) => {
     console.log(`Found ${blogs.length} blogs out of ${total} total`);
     
     const blogsWithLiked = blogs.map(blog => {
-      // Since we used .lean(), blog is already a plain JS object
       const blogObj = { ...blog };
       
-      // Add placeholder if featuredImage is missing or invalid
       if (!blogObj.featuredImage || !blogObj.featuredImage.url) {
         blogObj.featuredImage = {
           url: 'https://via.placeholder.com/800x450?text=No+Image+Available',
