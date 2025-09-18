@@ -24,16 +24,7 @@ const createApp = () => {
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-        fontSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'https://api.cloudinary.com'],
-      },
-    },
+    contentSecurityPolicy: false, // Disable CSP for Vercel compatibility
   }));
 
   // Development logging
@@ -71,11 +62,11 @@ const createApp = () => {
 
   // Rate limiting
   const limiter = rateLimit({
-    max: 100,
     windowMs: 15 * 60 * 1000, // 15 minutes
-    message: 'Too many requests from this IP, please try again in 15 minutes!',
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
+    message: 'Too many requests from this IP, please try again in 15 minutes!'
   });
 
   // Apply rate limiting to API routes
@@ -93,11 +84,7 @@ const createApp = () => {
   app.use(xss());
 
   // Prevent parameter pollution
-  app.use(hpp({
-    whitelist: [
-      'duration', 'ratingsQuantity', 'ratingsAverage', 'maxGroupSize', 'difficulty', 'price'
-    ]
-  }));
+  app.use(hpp());
 
   // Compress all responses
   app.use(compression());
@@ -107,100 +94,7 @@ const createApp = () => {
   app.use('/api/v1/blogs', blogRoutes);
   app.use('/api/v1/media', mediaRoutes);
 
-  // 3) ERROR HANDLING MIDDLEWARE (should be after all routes)
-  app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
-      status: 'error',
-      message: err.message || 'Internal Server Error',
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    });
-  });
-
-  // 4) 404 HANDLER
-  app.all('*', (req, res) => {
-    res.status(404).json({
-      status: 'fail',
-      message: `Can't find ${req.originalUrl} on this server!`
-    });
-  });
-
-  return app;
-};
-
-
-// Connect to MongoDB with retry logic
-const connectWithRetry = async () => {
-  const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://admin_00:0QHFFgpK6ecaP7LB@cluster0.j9dlacs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-  
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000, // 5 seconds timeout
-      socketTimeoutMS: 45000, // 45 seconds
-    });
-    console.log('MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    console.log('Retrying connection in 5 seconds...');
-    setTimeout(connectWithRetry, 5000);
-  }
-};
-
-const createApp = () => {
-  const app = express();
-  
-  // Apply all middleware
-  app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-    crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: false, // Disable CSP for now as it can cause issues with Vercel
-  }));
-
-  if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
-  } else {
-    app.use(morgan('combined'));
-  }
-
-  // For Vercel deployment, allow all origins in development
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  const corsOptions = {
-    origin: isProduction 
-      ? ['https://blogspace-orpin.vercel.app', 'https://blogspace-orpin.vercel.app']
-      : '*',
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    credentials: true
-  };
-
-  app.use(cors(corsOptions));
-  
-  // Handle preflight requests
-  app.options('*', cors(corsOptions));
-
-  // Rate limiting
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-
-  app.use('/api', limiter);
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-  app.use(mongoSanitize());
-  app.use(xss());
-  app.use(hpp());
-  app.use(compression());
-
-  // API Routes
-  app.use('/api/v1/users', userRoutes);
-  app.use('/api/v1/blogs', blogRoutes);
-  app.use('/api/v1/media', mediaRoutes);
-
+  // Health check endpoint
   app.get('/', (req, res) => {
     res.status(200).json({ 
       status: 'ok', 
@@ -210,10 +104,11 @@ const createApp = () => {
     });
   });
 
+  // API documentation endpoint
   app.get('/api', (req, res) => {
     res.json({
       status: 'success',
-      message: "Welcome to BlogSpace API",
+      message: 'Welcome to BlogSpace API',
       version: '1.0.0',
       endpoints: {
         users: '/api/v1/users',
@@ -227,8 +122,8 @@ const createApp = () => {
   // 404 handler for API routes
   app.use('/api/v1/*', (req, res) => {
     res.status(404).json({ 
-      success: false,
-      error: 'API endpoint not found',
+      status: 'error',
+      message: 'API endpoint not found',
       path: req.originalUrl,
       availableEndpoints: ['/api/v1/users', '/api/v1/blogs', '/api/v1/media']
     });
@@ -275,7 +170,39 @@ const createApp = () => {
     res.status(statusCode).json(response);
   });
 
+  // 404 handler for all other routes
+  app.all('*', (req, res) => {
+    res.status(404).json({
+      status: 'error',
+      message: `Can't find ${req.originalUrl} on this server!`
+    });
+  });
+
   return app;
+};
+
+// Connect to MongoDB with retry logic
+const connectWithRetry = async () => {
+  const MONGODB_URI = process.env.MONGODB_URI || 
+    process.env.MONGO_URI || 
+    "mongodb+srv://admin_00:0QHFFgpK6ecaP7LB@cluster0.j9dlacs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+  
+  const options = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  };
+
+  try {
+    await mongoose.connect(MONGODB_URI, options);
+    console.log('MongoDB connected successfully');
+    return true;
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    console.log('Retrying connection in 5 seconds...');
+    return false;
+  }
 };
 
 // For local development
@@ -284,50 +211,27 @@ if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 5001;
   
   const startServer = async () => {
-    try {
-      await mongoose.connect(process.env.MONGODB_URI 
-        || "mongodb+srv://admin_00:0QHFFgpK6ecaP7LB@cluster0.j9dlacs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0", {
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-      });
-      
-      console.log('MongoDB connected successfully');
-      
-      app.listen(PORT, () => {
-        console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-      });
-    } catch (error) {
-      console.error('Failed to start server:', error);
-      process.exit(1);
+    const isConnected = await connectWithRetry();
+    if (!isConnected) {
+      // If first attempt fails, retry once after 5 seconds
+      setTimeout(async () => {
+        const retryConnected = await connectWithRetry();
+        if (!retryConnected) {
+          console.error('Failed to connect to MongoDB after retry');
+          process.exit(1);
+        }
+      }, 5000);
     }
+    
+    app.listen(PORT, () => {
+      console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    });
   };
   
-  startServer();
-}
-
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-  const app = createApp();
-  const PORT = process.env.PORT || 5001;
-  
-  const startServer = async () => {
-    try {
-      await mongoose.connect(process.env.MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      });
-      console.log('Connected to MongoDB');
-
-      app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
-      });
-    } catch (error) {
-      console.error('Error connecting to MongoDB:', error);
-      process.exit(1);
-    }
-  };
-  
-  startServer();
+  startServer().catch(error => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
 }
 
 // For Vercel
@@ -343,18 +247,14 @@ export default async (req, res) => {
   
   // Initialize MongoDB connection for Vercel
   if (!mongoose.connection.readyState) {
-    try {
-      await mongoose.connect(process.env.MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      });
-      console.log('Connected to MongoDB (Vercel)');
-    } catch (error) {
-      console.error('Error connecting to MongoDB (Vercel):', error);
+    const isConnected = await connectWithRetry();
+    if (!isConnected) {
       return res.status(500).json({ 
         status: 'error',
         message: 'Database connection failed',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        ...(process.env.NODE_ENV === 'development' && { 
+          error: 'Failed to connect to MongoDB after retry' 
+        })
       });
     }
   }
