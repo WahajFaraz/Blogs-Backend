@@ -27,34 +27,18 @@ const createApp = () => {
     contentSecurityPolicy: false, // Disable CSP for Vercel compatibility
   }));
 
-  // Development logging
   if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
   } else {
     app.use(morgan('combined'));
   }
 
-  // Enable CORS
-  const allowedOrigins = [
-    'https://blogspace-orpin.vercel.app',
-    'http://localhost:3000' // For local development
-  ];
-
   const corsOptions = {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        console.log('CORS error for origin:', origin);
-        return callback(new Error(msg), false);
-      }
-      return callback(null, true);
-    },
-    credentials: true,
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Range', 'X-Content-Range']
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    credentials: true
   };
   
   app.use(cors(corsOptions));
