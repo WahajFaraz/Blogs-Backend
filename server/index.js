@@ -48,8 +48,21 @@ const createApp = () => {
       }
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['Content-Range', 'X-Content-Range', 'Set-Cookie'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'X-Content-Range'
+    ],
+    exposedHeaders: [
+      'Content-Range',
+      'X-Content-Range',
+      'Set-Cookie',
+      'Content-Length',
+      'Content-Type'
+    ],
     credentials: true,
     maxAge: 86400, // 24 hours
     preflightContinue: false,
@@ -59,6 +72,16 @@ const createApp = () => {
   // Apply CORS with the options
   app.use(cors(corsOptions));
   app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+  
+  // Handle preflight for all routes
+  app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') {
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
+      return res.status(200).json({});
+    }
+    next();
+  });
 
   // Rate limiting
   const limiter = rateLimit({
