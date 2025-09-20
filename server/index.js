@@ -259,35 +259,57 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// For Vercel 
-const vercelApp = createApp();
+// For Vercel - Initialize app once
+let vercelApp;
+try {
+  vercelApp = createApp();
+} catch (error) {
+  console.error('Error creating app:', error);
+}
 
 // Export the Vercel serverless function
 export default async (req, res) => {
-  // Handle preflight requests immediately for Vercel
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', 'https://blogspace-orpin.vercel.app');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Content-Range, Set-Cookie, Content-Length');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    return res.status(200).end();
-  }
-
-  // Ensure database connection
-  if (!mongoose.connection.readyState) {
-    const isConnected = await connectWithRetry();
-    if (!isConnected) {
-      return res.status(500).json({ 
-        status: 'error',
-        message: 'Database connection failed',
-        ...(process.env.NODE_ENV === 'development' && {
-          error: 'Failed to connect to MongoDB after retry'
-        })
-      });
+  console.log(`Vercel handler: ${req.method} ${req.url}`);
+  
+  try {
+    // Handle preflight requests immediately for Vercel
+    if (req.method === 'OPTIONS') {
+      console.log('Handling OPTIONS request');
+      res.setHeader('Access-Control-Allow-Origin', 'https://blogspace-orpin.vercel.app');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Content-Range, Set-Cookie, Content-Length');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Max-Age', '86400');
+      return res.status(200).end();
     }
-  }
 
-  // Pass the request to the Express app
-  return vercelApp(req, res);
+    // Ensure database connection
+    if (!mongoose.connection.readyState) {
+      console.log('Database not connected, attempting connection...');
+      const isConnected = await connectWithRetry();
+      if (!isConnected) {
+        console.log('Database connection failed');
+        return res.status(500).json({ 
+          status: 'error',
+          message: 'Database connection failed'
+        });
+      }
+    }
+
+    // Ensure app is created
+    if (!vercelApp) {
+      console.log('Creating Vercel app...');
+      vercelApp = createApp();
+    }
+
+    // Pass the request to the Express app
+    return vercelApp(req, res);
+  } catch (error) {
+    console.error('Vercel handler error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
 };
