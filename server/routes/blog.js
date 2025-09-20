@@ -122,8 +122,7 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-
-
+// Get user's own posts - must come before /:id route
 router.get('/my-posts', auth, async (req, res) => {
   try {
     const blogs = await Blog.find({ author: req.user._id })
