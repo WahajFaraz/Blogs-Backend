@@ -14,7 +14,6 @@ import userRoutes from './routes/user.js';
 import blogRoutes from './routes/blog.js';
 import mediaRoutes from './routes/media.js';
 
-// Create Express app
 const createApp = () => {
   const app = express();
 
@@ -67,19 +66,21 @@ const createApp = () => {
     credentials: true,
     maxAge: 86400, // Cache preflight request for 24 hours
     preflightContinue: false,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 200 // Changed from 204 to 200 for better Vercel compatibility
   };
   
   // Apply CORS with the options
   app.use(cors(corsOptions));
   app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
   
-  // Handle preflight for all routes
+  // Handle preflight for all routes - improved for Vercel
   app.use((req, res, next) => {
     if (req.method === 'OPTIONS') {
       res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
-      return res.status(200).json({});
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Max-Age', '86400');
+      return res.status(200).end();
     }
     next();
   });
@@ -260,10 +261,20 @@ if (process.env.NODE_ENV !== 'production') {
 
 // For Vercel 
 const vercelApp = createApp();
+
 // Export the Vercel serverless function
 export default async (req, res) => {
-  // Handle preflight requests
-  
+  // Handle preflight requests immediately for Vercel
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', 'https://blogspace-orpin.vercel.app');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Content-Range, Set-Cookie, Content-Length');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.status(200).end();
+  }
+
+  // Ensure database connection
   if (!mongoose.connection.readyState) {
     const isConnected = await connectWithRetry();
     if (!isConnected) {
@@ -272,6 +283,11 @@ export default async (req, res) => {
         message: 'Database connection failed',
         ...(process.env.NODE_ENV === 'development' && {
           error: 'Failed to connect to MongoDB after retry'
-        }) }); } 
-  } // Pass the request to the Express app
-  return vercelApp(req, res); };
+        })
+      });
+    }
+  }
+
+  // Pass the request to the Express app
+  return vercelApp(req, res);
+};
